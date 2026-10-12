@@ -356,10 +356,10 @@ function applyDocs(){
 function queueSet(id,body){local.docs[id]={data:JSON.parse(JSON.stringify(body)),ts:Date.now()};local.pending[id]=true;saveLocal();flush();}
 function saveMonth(k){queueSet("m-"+k,{tx:state.months[k]||[]});}
 function saveSettings(){queueSet("settings",state.settings);}
-function api(path,method,body,signal){return fetch(path,{method:method,signal:signal,headers:{"content-type":"application/json","x-h2o-code":CODE||""},body:body?JSON.stringify(body):undefined});}
+function api(path,method,body,signal){/* empty code = no-code mode */return fetch(path,{method:method,signal:signal,headers:{"content-type":"application/json","x-h2o-code":CODE||""},body:body?JSON.stringify(body):undefined});}
 function setSync(st){state.sync=st;var el=$("syncState");if(!el)return;el.dataset.s=st;el.textContent=st==="ok"?"Synced":st==="saving"?"Saving…":st==="offline"?"Offline · saved on this phone":"";}
 async function flush(){
-  if(!CODE||syncing)return;
+  if(CODE==null||syncing)return;
   var ids=Object.keys(local.pending);if(!ids.length){setSync("ok");return;}
   syncing=true;setSync("saving");var failed=false;
   for(var i=0;i<ids.length;i++){
@@ -377,7 +377,7 @@ async function flush(){
   if(Object.keys(local.pending).length)flush();else setSync("ok");
 }
 async function pull(){
-  if(!CODE)return false;
+  if(CODE==null)return false;
   try{
     var r=await api("/api/sync","GET");
     if(r.status===401)return "bad";
@@ -410,9 +410,16 @@ async function unlock(code){
   try{localStorage.setItem(CODEKEY,code);}catch(e){}
   opened();
 }
+async function tryOpenWithoutCode(){
+  CODE="";var res=await pull();
+  if(res===true){opened();return;}
+  CODE=null;
+  if(res==="bad")lock("");
+  else{lock("");$("gateErr").textContent="Can't reach H2O. Check your internet connection, then reload.";}
+}
 $("gateForm").addEventListener("submit",function(e){e.preventDefault();var c=$("gateCode").value.trim();if(c)unlock(c);});
-document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"&&CODE){pull();flush();}});
-window.addEventListener("online",function(){if(CODE){flush();pull();}});
+document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"&&CODE!=null){pull();flush();}});
+window.addEventListener("online",function(){if(CODE!=null){flush();pull();}});
 
 function boot(){
   $("f-date").value=todayISO();fillCats();
@@ -421,6 +428,7 @@ function boot(){
   if(m)history.replaceState(null,"",location.pathname);
   var stored=null;try{stored=localStorage.getItem(CODEKEY);}catch(e){}
   if(hashCode){render();unlock(hashCode);}
+  else if(!stored){render();tryOpenWithoutCode();}
   else if(stored){
     CODE=stored;opened();
     pull().then(function(r){if(r==="bad")lock("Your code changed. Enter the new one.");});
