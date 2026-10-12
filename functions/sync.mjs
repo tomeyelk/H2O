@@ -11,9 +11,8 @@ const json = (body, status = 200) =>
 
 export default async (req) => {
   const code = Netlify.env.get("H2O_CODE");
-  if (!code) return json({ error: "H2O_CODE is not set on Netlify" }, 500);
-  if (req.headers.get("x-h2o-code") !== code) return json({ error: "unauthorized" }, 401);
-
+       if (code && req.headers.get("x-h2o-code") !== code) return json({ error: "unauthorized" }, 401);
+  
   const store = getStore({ name: "h2o", consistency: "strong" });
 
   if (req.method === "GET") {
